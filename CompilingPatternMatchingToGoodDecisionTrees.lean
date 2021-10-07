@@ -68,20 +68,22 @@ partial def default [Inhabited α] : ClauseMatrix α → ClauseMatrix α :=
     ]
   default qb
 
+abbrev Occurrence := List Nat
+
 inductive DecisionTree (α : Type) where
   | leaf   : α → DecisionTree α
   | fail   : DecisionTree α
-  | switch : List (String × DecisionTree α) → DecisionTree α
+  | switch : Occurrence → List (String × DecisionTree α) → DecisionTree α
   | swap   : Nat → DecisionTree α → DecisionTree α
   deriving Inhabited
 
 partial instance [ToString α] : ToString (DecisionTree α) where
   toString :=
     open Std in let rec go
-      | DecisionTree.leaf a   => s!"leaf({a})"
-      | DecisionTree.fail     => "fail"
-      | DecisionTree.switch l => s!"switch({Format.joinSep (l.map (fun (c, t) => s!"{c}:{go t}")) ", "})"
-      | DecisionTree.swap i t => s!"swap_{i}({go t})"
+      | DecisionTree.leaf a     => s!"{a}"
+      | DecisionTree.fail       => "fail"
+      | DecisionTree.switch o l => s!"switch {Format.joinSep o "."} ({Format.indentD $ Format.joinSep (l.map (fun (c, t) => s!"{c} => {go t}")) Format.line})"
+      | DecisionTree.swap i t   => s!"swap {i} ({go t})"
     go
 
 abbrev CaseList (α : Type) := List (String × DecisionTree α)
@@ -103,55 +105,55 @@ partial def headConstructors : Pattern → HashSet (String × Nat)
   | Pattern.constructor c ps => HashSet.empty.insert (c, ps.length)
   | Pattern.or q₁ q₂         => HashSet.union (headConstructors q₁) (headConstructors q₂)
 
-partial def compilation [Inhabited α] (signatures : List Nat) : ClauseMatrix α → DecisionTree α
-  | matrix@((ps, a) :: _) =>
+partial def compilation [ToString α] [Inhabited α] (signatures : List Nat) : List Occurrence → ClauseMatrix α → DecisionTree α
+  | occurrences, matrix@((ps, a) :: _) =>
     if ps.all (·.isWildcard) then DecisionTree.leaf a
     else
-      let index := (List.range matrix.length) |>.find? (fun n => matrix.any fun (ps, _) => !(ps.get! n).isWildcard) |>.get!
-      let column := matrix.map (·.1.get! index)
-      if index == 0 then
-        let headConstructors := column |>.map headConstructors |>.foldl HashSet.union HashSet.empty |>.toList
-        let caseList : CaseList α := headConstructors.map fun (c, a) => (c, compilation signatures (specialization c a matrix))
-        let signature := signatures.head!
-        DecisionTree.switch ((if caseList.length == signature then [] else [("*", compilation signatures (default matrix))]) ++ caseList)
-      else
-        let matrix := matrix.map fun (ps, a) => (ps.swap 0 index, a)
-        DecisionTree.swap index (compilation signatures matrix)
-  | _ => DecisionTree.fail
+      if let o :: os := occurrences then
+        let index := (List.range ps.length) |>.find? (fun n => matrix.any fun (ps, _) => !(ps.get! n).isWildcard) |>.get!
+        let column := matrix.map (·.1.get! index)
+        if index == 0 then
+          let headConstructors := column |>.map headConstructors |>.foldl HashSet.union HashSet.empty |>.toList
+          let caseList : CaseList α := headConstructors.map fun
+            (c, a) => (c, compilation signatures ((List.range a).map (o ++ [·]) ++ os) (specialization c a matrix))
+          let signature := signatures.head!
+          DecisionTree.switch o $ (if caseList.length == signature then [] else [("*", compilation signatures os (default matrix))]) ++ caseList
+        else
+          let matrix := matrix.map fun (ps, a) => (ps.swap 0 index, a)
+          DecisionTree.swap index (compilation signatures (occurrences.swap 0 index) matrix)
+      else DecisionTree.fail
+  | _, _ => DecisionTree.fail
 
-#eval
-  let nil := Pattern.constructor "nil" []
-  let cons p₁ p₂ := Pattern.constructor "cons" [p₁, p₂]
+---
 
-  let red := Pattern.constructor "red" []
-  let green := Pattern.constructor "green" []
-  let blue := Pattern.constructor "blue" []
+def nil := Pattern.constructor "nil" []
+def cons p₁ p₂ := Pattern.constructor "cons" [p₁, p₂]
+def __ := Pattern.wildcard
 
-  let __ := Pattern.wildcard
+#eval compilation [2, 2] [[0], [1]]
+  [
+    ([nil,        __        ], 1),
+    ([__,         nil       ], 2),
+    ([cons __ __, cons __ __], 3)
+  ]
 
-  (
-    compilation [2, 2]
-      [
-        ([nil,        __        ], 1),
-        ([__,         nil       ], 2),
-        ([cons __ __, cons __ __], 3)
-      ],
-    compilation [2, 2]
-      [
-        ([__,         nil       ], 1),
-        ([nil,        __        ], 2),
-        ([cons __ __, cons __ __], 3)
-      ],
-    compilation [2, 2]
-      [
-        ([cons __ __, __        ], 1),
-        ([__,         cons __ __], 2),
-        ([nil,        nil       ], 3)
-      ],
-    compilation [2, 3]
-      [
-        ([cons __ __, red  ], 1),
-        ([__,         green], 2),
-        ([nil,        __   ], 3)
-      ]
-  )
+#eval compilation [2, 2] [[1], [0]]
+  [
+    ([__,         nil       ], 1),
+    ([nil,        __        ], 2),
+    ([cons __ __, cons __ __], 3)
+  ]
+
+#eval compilation [2, 2] [[0], [1]]
+  [
+    ([cons __ __, __        ], 1),
+    ([__,         cons __ __], 2),
+    ([nil,        nil       ], 3)
+  ]
+
+#eval compilation [2, 2] [[0], [1]]
+  [
+    ([cons __ (cons (cons __ __) __), __ ], 1),
+    ([__,                             nil], 2),
+    ([__,                             __ ], 3)
+  ]
