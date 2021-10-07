@@ -26,9 +26,6 @@ partial instance : ToString Pattern where
       | Pattern.or p₁ p₂         => s!"{f p₁} | {f p₂}"
     f
 
-abbrev PatternRow := List Pattern
-abbrev PatternMatrix := List PatternRow
-
 abbrev ClauseRow (α : Type) [Inhabited α] := List Pattern × α
 abbrev ClauseMatrix (α : Type) [Inhabited α] := List (ClauseRow α)
 
