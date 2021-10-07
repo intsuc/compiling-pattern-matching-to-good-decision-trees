@@ -47,19 +47,22 @@ partial def default [Inhabited α] : ClauseMatrix α → ClauseMatrix α :=
 
 abbrev Occurrence := List Nat
 
-inductive DecisionTree (α : Type) where
-  | leaf   : α → DecisionTree α
-  | switch : Occurrence → List (String × DecisionTree α) → DecisionTree α
-  deriving Inhabited
+mutual
+  inductive DecisionTree (α : Type) where
+    | leaf   : α → DecisionTree α
+    | switch : Occurrence → CaseList α → DecisionTree α
+    deriving Inhabited
+
+  inductive CaseList (α : Type) where
+    | mk : List (String × DecisionTree α) → CaseList α
+end
 
 partial instance [ToString α] : ToString (DecisionTree α) where
   toString :=
     open Std in let rec go
-      | DecisionTree.leaf a     => s!"{a}"
-      | DecisionTree.switch o l => s!"switch {Format.joinSep o "."} {Format.indentD $ Format.joinSep (l.reverse.map (fun (c, t) => s!"{c} => {go t}")) "\n"}"
+      | DecisionTree.leaf a                   => s!"{a}"
+      | DecisionTree.switch o (CaseList.mk l) => s!"switch {Format.joinSep o "."} {Format.indentD $ Format.joinSep (l.reverse.map (fun (c, t) => s!"{c} => {go t}")) "\n"}"
     go
-
-abbrev CaseList (α : Type) := List (String × DecisionTree α)
 
 def Pattern.isWildcard : Pattern → Bool
   | Pattern.wildcard => true
@@ -87,9 +90,9 @@ partial def compile [Inhabited α] (signatures : List Nat) : List Occurrence →
         let caseList := ← headConstructors.mapM fun
           (c, a) => do (c, ← compile signatures ((List.range a).map (o ++ [·]) ++ os) (specialize c a matrix))
         if headConstructors.length == signatures.head! then
-          DecisionTree.switch o caseList
+          DecisionTree.switch o (CaseList.mk caseList)
         else
-          DecisionTree.switch o (("_", ← compile signatures os (default matrix)) :: caseList)
+          DecisionTree.switch o (CaseList.mk (("_", ← compile signatures os (default matrix)) :: caseList))
       else
         let matrix := matrix.map fun (ps, a) => (ps.swap 0 index, a)
         compile signatures (occurrences.swap 0 index) matrix
