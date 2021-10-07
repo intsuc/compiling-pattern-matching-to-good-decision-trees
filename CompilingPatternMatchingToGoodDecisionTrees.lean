@@ -4,12 +4,14 @@ inductive Value where
 
 partial instance : ToString Value where
   toString :=
-    open Std in let rec f
+    open Std in let rec go
       | Value.constructor c [] => c
-      | Value.constructor c vs => s!"{c}({Format.joinSep (vs.map f) ", "})"
-    f
+      | Value.constructor c vs => s!"{c}({Format.joinSep (vs.map go) ", "})"
+    go
 
-def «at» : Value → List Nat → Value
+abbrev Occurrence := List Nat
+
+def «at» : Value → Occurrence → Value
   | v,              []     => v
   | Value.constructor c vs, k :: o => «at» (vs.get! k) o
 
@@ -86,3 +88,29 @@ partial def default : ClauseMatrix α → ClauseMatrix α :=
       ([__,  __ ], 3)
     ]
   default qb
+
+mutual
+  inductive DecisionTree (α : Type) where
+    | leaf   : α → DecisionTree α
+    | fail   : DecisionTree α
+    | switch : Occurrence → SwitchCaseList α → DecisionTree α
+    | swap   : Nat → DecisionTree α → DecisionTree α
+    deriving Inhabited
+
+  inductive SwitchCaseList (α : Type) where
+    | head : (String × DecisionTree α) → SwitchCaseList α
+    | cons : (String × DecisionTree α) → SwitchCaseList α → SwitchCaseList α
+end
+
+mutual
+  partial def evaluation [Inhabited α] : List Value → DecisionTree α → α
+    | _,                            DecisionTree.leaf a     => a
+    | vs,                           DecisionTree.swap i t   => evaluation (vs |>.set 0 (vs.get! i) |>.set i (vs.get! 0)) t
+    | Value.constructor c ws :: vs, DecisionTree.switch _ l => let (c, t) := caseSelection c l
+                                                               if c == "*" then evaluation vs t else evaluation (ws ++ vs) t
+    | _,                            _                       => arbitrary
+
+  partial def caseSelection (constructor : String) : SwitchCaseList α → (String × DecisionTree α)
+    | SwitchCaseList.head (c, t)   => (c, t)
+    | SwitchCaseList.cons (c, t) l => if constructor == c then (c, t) else caseSelection constructor l
+end
