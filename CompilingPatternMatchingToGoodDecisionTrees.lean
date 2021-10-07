@@ -149,7 +149,7 @@ def __ := Pattern.wildcard
 
 #eval compilation [2, 2] [[0], [1]]
   [
-    ([cons __ (cons (cons __ __) __), __ ], 1),
+    ([cons __ (cons __ (cons __ __)), __ ], 1),
     ([__,                             nil], 2),
     ([__,                             __ ], 3)
   ]
