@@ -89,22 +89,12 @@ partial instance [ToString α] : ToString (DecisionTree α) where
 
 abbrev CaseList (α : Type) := List (String × DecisionTree α)
 
+def Pattern.isWildcard : Pattern → Bool
+  | Pattern.wildcard => true
+  | _                => false
+
 def List.swap [Inhabited α] (as : List α) (i₁ i₂ : Nat) : List α :=
   as |>.set i₁ (as.get! i₂) |>.set i₂ (as.get! i₁)
-
-mutual
-  partial def evaluation [Inhabited α] : List Value → DecisionTree α → α
-    | _,                            DecisionTree.leaf a   => a
-    | vs,                           DecisionTree.swap i t => evaluation (vs.swap 0 i) t
-    | Value.constructor c ws :: vs, DecisionTree.switch l => let (c, t) := caseSelection c l
-                                                             if c == "*" then evaluation vs t else evaluation (ws ++ vs) t
-    | _,                            _                     => arbitrary
-
-  partial def caseSelection (constructor : String) : CaseList α → (String × DecisionTree α)
-    | [("*", t)]  => ("*", t)
-    | (c, t) :: l => if constructor == c then (c, t) else caseSelection constructor l
-    | _           => arbitrary
-end
 
 open Std
 
@@ -115,10 +105,6 @@ partial def headConstructors : Pattern → HashSet (String × Nat)
   | Pattern.wildcard         => HashSet.empty
   | Pattern.constructor c ps => HashSet.empty.insert (c, ps.length)
   | Pattern.or q₁ q₂         => HashSet.union (headConstructors q₁) (headConstructors q₂)
-
-def Pattern.isWildcard : Pattern → Bool
-  | Pattern.wildcard => true
-  | _                => false
 
 partial def compilation [Inhabited α] (signatures : List Nat) : ClauseMatrix α → DecisionTree α
   | matrix@((ps, a) :: _) =>
