@@ -37,18 +37,6 @@ partial def specialization [Inhabited α] (constructor : String) (arity : Nat) :
                                              specialization constructor arity [(q₂ :: ps, a)]
     | ([],                             a) => [([], a)]
 
-#eval
-  let nil := Pattern.constructor "nil" []
-  let cons p₁ p₂ := Pattern.constructor "cons" [p₁, p₂]
-  let __ := Pattern.wildcard
-  let pa : ClauseMatrix Nat :=
-    [
-      ([nil,        __        ], 1),
-      ([__,         nil       ], 2),
-      ([cons __ __, cons __ __], 3)
-    ]
-  (specialization "cons" 2 pa, specialization "nil" 0 pa)
-
 partial def default [Inhabited α] : ClauseMatrix α → ClauseMatrix α :=
   List.join ∘ List.map fun
     | (Pattern.constructor c qs :: ps, _) => []
@@ -56,17 +44,6 @@ partial def default [Inhabited α] : ClauseMatrix α → ClauseMatrix α :=
     | (Pattern.or q₁ q₂ :: ps,         a) => default [(q₁ :: ps, a)] ++
                                              default [(q₂ :: ps, a)]
     | ([],                             a) => [([], a)]
-
-#eval
-  let nil := Pattern.constructor "nil" []
-  let __ := Pattern.wildcard
-  let qb : ClauseMatrix Nat :=
-    [
-      ([nil, __ ], 1),
-      ([__,  nil], 2),
-      ([__,  __ ], 3)
-    ]
-  default qb
 
 abbrev Occurrence := List Nat
 
@@ -127,6 +104,27 @@ partial def compilation [ToString α] [Inhabited α] (signatures : List Nat) : L
 def nil := Pattern.constructor "nil" []
 def cons p₁ p₂ := Pattern.constructor "cons" [p₁, p₂]
 def __ := Pattern.wildcard
+
+#eval specialization "cons" 2
+  [
+    ([nil,        __        ], 1),
+    ([__,         nil       ], 2),
+    ([cons __ __, cons __ __], 3)
+  ]
+
+#eval specialization "nil" 0
+  [
+    ([nil,        __        ], 1),
+    ([__,         nil       ], 2),
+    ([cons __ __, cons __ __], 3)
+  ]
+
+#eval default
+  [
+    ([nil, __ ], 1),
+    ([__,  nil], 2),
+    ([__,  __ ], 3)
+  ]
 
 #eval compilation [2, 2] [[0], [1]]
   [
