@@ -74,7 +74,6 @@ inductive DecisionTree (α : Type) where
   | leaf   : α → DecisionTree α
   | fail   : DecisionTree α
   | switch : Occurrence → List (String × DecisionTree α) → DecisionTree α
-  | swap   : Nat → DecisionTree α → DecisionTree α
   deriving Inhabited
 
 partial instance [ToString α] : ToString (DecisionTree α) where
@@ -82,8 +81,7 @@ partial instance [ToString α] : ToString (DecisionTree α) where
     open Std in let rec go
       | DecisionTree.leaf a     => s!"{a}"
       | DecisionTree.fail       => "fail"
-      | DecisionTree.switch o l => s!"switch {Format.joinSep o "."} ({Format.indentD $ Format.joinSep (l.map (fun (c, t) => s!"{c} => {go t}")) Format.line})"
-      | DecisionTree.swap i t   => s!"swap {i} ({go t})"
+      | DecisionTree.switch o l => s!"switch {Format.joinSep o "."} {Format.indentD $ Format.joinSep (l.reverse.map (fun (c, t) => s!"{c} => {go t}")) "\n"}"
     go
 
 abbrev CaseList (α : Type) := List (String × DecisionTree α)
@@ -117,10 +115,10 @@ partial def compilation [ToString α] [Inhabited α] (signatures : List Nat) : L
           let caseList : CaseList α := headConstructors.map fun
             (c, a) => (c, compilation signatures ((List.range a).map (o ++ [·]) ++ os) (specialization c a matrix))
           let signature := signatures.head!
-          DecisionTree.switch o $ (if caseList.length == signature then [] else [("*", compilation signatures os (default matrix))]) ++ caseList
+          DecisionTree.switch o $ (if caseList.length == signature then [] else [("_", compilation signatures os (default matrix))]) ++ caseList
         else
           let matrix := matrix.map fun (ps, a) => (ps.swap 0 index, a)
-          DecisionTree.swap index (compilation signatures (occurrences.swap 0 index) matrix)
+          compilation signatures (occurrences.swap 0 index) matrix
       else DecisionTree.fail
   | _, _ => DecisionTree.fail
 
