@@ -29,12 +29,12 @@ partial instance : ToString Pattern where
 abbrev ClauseRow (α : Type) [Inhabited α] := List Pattern × α
 abbrev ClauseMatrix (α : Type) [Inhabited α] := List (ClauseRow α)
 
-partial def specialization [Inhabited α] (constructor : String) (arity : Nat) : ClauseMatrix α → ClauseMatrix α :=
+partial def specialize [Inhabited α] (constructor : String) (arity : Nat) : ClauseMatrix α → ClauseMatrix α :=
   List.join ∘ List.map fun
     | (Pattern.constructor c qs :: ps, a) => if constructor == c then [(qs ++ ps, a)] else []
     | (Pattern.wildcard :: ps,         a) => [(List.replicate arity Pattern.wildcard ++ ps, a)]
-    | (Pattern.or q₁ q₂ :: ps,         a) => specialization constructor arity [(q₁ :: ps, a)] ++
-                                             specialization constructor arity [(q₂ :: ps, a)]
+    | (Pattern.or q₁ q₂ :: ps,         a) => specialize constructor arity [(q₁ :: ps, a)] ++
+                                             specialize constructor arity [(q₂ :: ps, a)]
     | ([],                             a) => [([], a)]
 
 partial def default [Inhabited α] : ClauseMatrix α → ClauseMatrix α :=
@@ -73,7 +73,7 @@ open Std
 def HashSet.union [BEq α] [Hashable α] (m₁ m₂ : HashSet α) : HashSet α :=
   HashSet.empty |>.fold (·.insert) m₁ |>.fold (·.insert) m₂
 
-partial def compilation [Inhabited α] (signatures : List Nat) : List Occurrence → ClauseMatrix α → Except String (DecisionTree α)
+partial def compile [Inhabited α] (signatures : List Nat) : List Occurrence → ClauseMatrix α → Except String (DecisionTree α)
   | _,           []                    => throw "fail"
   | occurrences, matrix@((ps, a) :: _) =>
     if ps.all (·.isWildcard) then
@@ -84,16 +84,15 @@ partial def compilation [Inhabited α] (signatures : List Nat) : List Occurrence
       if index == 0 then do
         let column := matrix.map (·.fst.get! index)
         let headConstructors := column |>.map headConstructors |>.foldl HashSet.union HashSet.empty |>.toList
-        let signature := signatures.head!
         let caseList := ← headConstructors.mapM fun
-          (c, a) => do (c, ← compilation signatures ((List.range a).map (o ++ [·]) ++ os) (specialization c a matrix))
-        if headConstructors.length == signature then
+          (c, a) => do (c, ← compile signatures ((List.range a).map (o ++ [·]) ++ os) (specialize c a matrix))
+        if headConstructors.length == signatures.head! then
           DecisionTree.switch o caseList
         else
-          DecisionTree.switch o (("_", ← compilation signatures os (default matrix)) :: caseList)
+          DecisionTree.switch o (("_", ← compile signatures os (default matrix)) :: caseList)
       else
         let matrix := matrix.map fun (ps, a) => (ps.swap 0 index, a)
-        compilation signatures (occurrences.swap 0 index) matrix
+        compile signatures (occurrences.swap 0 index) matrix
 where
   headConstructors : Pattern → HashSet (String × Nat)
     | Pattern.wildcard         => HashSet.empty
@@ -106,14 +105,14 @@ def nil := Pattern.constructor "nil" []
 def cons p₁ p₂ := Pattern.constructor "cons" [p₁, p₂]
 def __ := Pattern.wildcard
 
-#eval specialization "cons" 2
+#eval specialize "cons" 2
   [
     ([nil,        __        ], 1),
     ([__,         nil       ], 2),
     ([cons __ __, cons __ __], 3)
   ]
 
-#eval specialization "nil" 0
+#eval specialize "nil" 0
   [
     ([nil,        __        ], 1),
     ([__,         nil       ], 2),
@@ -127,35 +126,35 @@ def __ := Pattern.wildcard
     ([__,  __ ], 3)
   ]
 
-#eval compilation [2, 2] [[0], [1]]
+#eval compile [2, 2] [[0], [1]]
   [
     ([nil,        __        ], 1),
     ([__,         nil       ], 2),
     ([cons __ __, cons __ __], 3)
   ]
 
-#eval compilation [2, 2] [[1], [0]]
+#eval compile [2, 2] [[1], [0]]
   [
     ([__,         nil       ], 1),
     ([nil,        __        ], 2),
     ([cons __ __, cons __ __], 3)
   ]
 
-#eval compilation [2, 2] [[0], [1]]
+#eval compile [2, 2] [[0], [1]]
   [
     ([cons __ __, __        ], 1),
     ([__,         cons __ __], 2),
     ([nil,        nil       ], 3)
   ]
 
-#eval compilation [2, 2] [[0], [1]]
+#eval compile [2, 2] [[0], [1]]
   [
     ([cons __ (cons __ (cons __ __)), __ ], 1),
     ([__,                             nil], 2),
     ([__,                             __ ], 3)
   ]
 
-#eval compilation [2] [[0]]
+#eval compile [2] [[0]]
   [
     ([nil], 1)
   ]
