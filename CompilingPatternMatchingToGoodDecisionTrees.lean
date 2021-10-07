@@ -19,12 +19,12 @@ inductive Pattern where
 
 partial instance : ToString Pattern where
   toString :=
-    open Std in let rec f
+    open Std in let rec go
       | Pattern.wildcard         => "_"
       | Pattern.constructor c [] => c
-      | Pattern.constructor c ps => s!"{c}({Format.joinSep (ps.map f) ", "})"
-      | Pattern.or p₁ p₂         => s!"{f p₁} | {f p₂}"
-    f
+      | Pattern.constructor c ps => s!"{c}({Format.joinSep (ps.map go) ", "})"
+      | Pattern.or p₁ p₂         => s!"{go p₁} | {go p₂}"
+    go
 
 abbrev ClauseRow (α : Type) [Inhabited α] := List Pattern × α
 abbrev ClauseMatrix (α : Type) [Inhabited α] := List (ClauseRow α)
