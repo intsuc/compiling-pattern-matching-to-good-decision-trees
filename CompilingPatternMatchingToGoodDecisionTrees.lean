@@ -11,14 +11,6 @@ partial instance : ToString Value where
       | Value.constructor c vs => s!"{c}({Format.joinSep (vs.map go) ", "})"
     go
 
-abbrev Occurrence := List Nat
-
-def «at» : Value → Occurrence → Value
-  | v,                      []     => v
-  | Value.constructor c vs, k :: o => «at» (vs.get! k) o
-
-infix:70 " / " => «at»
-
 inductive Pattern where
   | wildcard    : Pattern
   | constructor : String → List Pattern → Pattern
@@ -39,19 +31,6 @@ abbrev PatternMatrix := List PatternRow
 
 abbrev ClauseRow (α : Type) [Inhabited α] := List Pattern × α
 abbrev ClauseMatrix (α : Type) [Inhabited α] := List (ClauseRow α)
-
-mutual
-  partial def «instance» : Pattern → Value → Bool
-    | Pattern.wildcard,          _                       => true
-    | Pattern.or p₁ p₂,          v                       => «instance» p₁ v || «instance» p₂ v
-    | Pattern.constructor pc ps, Value.constructor vc vs => pc == vc && instance' ps vs
-
-  partial def instance' (ps : List Pattern) (vs : List Value) : Bool :=
-    ps |>.zip vs |>.all fun (p, v) => «instance» p v
-end
-
-infix:50 " ⪯ " => «instance»
-infix:50 " ⪯ " => instance'
 
 partial def specialization [Inhabited α] (constructor : String) (arity : Nat) : ClauseMatrix α → ClauseMatrix α :=
   List.join ∘ List.map fun
