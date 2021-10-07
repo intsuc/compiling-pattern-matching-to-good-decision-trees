@@ -139,7 +139,13 @@ partial def compilation [Inhabited α] (signatures : List Nat) : ClauseMatrix α
 #eval
   let nil := Pattern.constructor "nil" []
   let cons p₁ p₂ := Pattern.constructor "cons" [p₁, p₂]
+
+  let red := Pattern.constructor "red" []
+  let green := Pattern.constructor "green" []
+  let blue := Pattern.constructor "blue" []
+
   let __ := Pattern.wildcard
+
   (
     compilation [2, 2]
       [
@@ -158,5 +164,11 @@ partial def compilation [Inhabited α] (signatures : List Nat) : ClauseMatrix α
         ([cons __ __, __        ], 1),
         ([__,         cons __ __], 2),
         ([nil,        nil       ], 3)
+      ],
+    compilation [2, 3]
+      [
+        ([cons __ __, red  ], 1),
+        ([__,         green], 2),
+        ([nil,        __   ], 3)
       ]
   )
