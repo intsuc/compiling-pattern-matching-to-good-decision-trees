@@ -1,15 +1,10 @@
 import Std.Data.HashSet
 
+open Std
+
 inductive Value where
   | constructor : String → List Value → Value
   deriving Inhabited
-
-partial instance : ToString Value where
-  toString :=
-    open Std in let rec go
-      | Value.constructor c [] => c
-      | Value.constructor c vs => s!"{c}({Format.joinSep (vs.map go) ", "})"
-    go
 
 inductive Pattern where
   | wildcard    : Pattern
@@ -17,17 +12,31 @@ inductive Pattern where
   | or          : Pattern → Pattern → Pattern
   deriving Inhabited
 
-partial instance : ToString Pattern where
-  toString :=
-    open Std in let rec go
-      | Pattern.wildcard         => "_"
-      | Pattern.constructor c [] => c
-      | Pattern.constructor c ps => s!"{c}({Format.joinSep (ps.map go) ", "})"
-      | Pattern.or p₁ p₂         => s!"{go p₁} | {go p₂}"
-    go
+abbrev ClauseRow (α : Type) := List Pattern × α
 
-abbrev ClauseRow (α : Type) [Inhabited α] := List Pattern × α
-abbrev ClauseMatrix (α : Type) [Inhabited α] := List (ClauseRow α)
+abbrev ClauseMatrix (α : Type) := List (ClauseRow α)
+
+abbrev Occurrence := List Nat
+
+mutual
+  inductive DecisionTree (α : Type) where
+    | leaf   : α → DecisionTree α
+    | switch : Occurrence → CaseList α → DecisionTree α
+    deriving Inhabited
+
+  inductive CaseList (α : Type) where
+    | mk : List (String × DecisionTree α) → CaseList α
+end
+
+def Pattern.isWildcard : Pattern → Bool
+  | Pattern.wildcard => true
+  | _                => false
+
+def List.swap [Inhabited α] (as : List α) (i₁ i₂ : Nat) : List α :=
+  as |>.set i₁ (as.get! i₂) |>.set i₂ (as.get! i₁)
+
+def HashSet.union [BEq α] [Hashable α] (m₁ m₂ : HashSet α) : HashSet α :=
+  HashSet.empty |>.fold (·.insert) m₁ |>.fold (·.insert) m₂
 
 partial def specialize [Inhabited α] (constructor : String) (arity : Nat) : ClauseMatrix α → ClauseMatrix α :=
   List.join ∘ List.map fun
@@ -44,37 +53,6 @@ partial def default [Inhabited α] : ClauseMatrix α → ClauseMatrix α :=
     | (Pattern.or q₁ q₂ :: ps,         a) => default [(q₁ :: ps, a)] ++
                                              default [(q₂ :: ps, a)]
     | ([],                             a) => [([], a)]
-
-abbrev Occurrence := List Nat
-
-mutual
-  inductive DecisionTree (α : Type) where
-    | leaf   : α → DecisionTree α
-    | switch : Occurrence → CaseList α → DecisionTree α
-    deriving Inhabited
-
-  inductive CaseList (α : Type) where
-    | mk : List (String × DecisionTree α) → CaseList α
-end
-
-partial instance [ToString α] : ToString (DecisionTree α) where
-  toString :=
-    open Std in let rec go
-      | DecisionTree.leaf a                   => s!"{a}"
-      | DecisionTree.switch o (CaseList.mk l) => s!"switch {Format.joinSep o "."} {Format.indentD $ Format.joinSep (l.reverse.map (fun (c, t) => s!"{c} => {go t}")) "\n"}"
-    go
-
-def Pattern.isWildcard : Pattern → Bool
-  | Pattern.wildcard => true
-  | _                => false
-
-def List.swap [Inhabited α] (as : List α) (i₁ i₂ : Nat) : List α :=
-  as |>.set i₁ (as.get! i₂) |>.set i₂ (as.get! i₁)
-
-open Std
-
-def HashSet.union [BEq α] [Hashable α] (m₁ m₂ : HashSet α) : HashSet α :=
-  HashSet.empty |>.fold (·.insert) m₁ |>.fold (·.insert) m₂
 
 partial def compile [Inhabited α] (signatures : List Nat) : List Occurrence → ClauseMatrix α → Except String (DecisionTree α)
   | _,           []                    => throw "fail"
@@ -101,63 +79,3 @@ where
     | Pattern.wildcard         => HashSet.empty
     | Pattern.constructor c ps => HashSet.empty.insert (c, ps.length)
     | Pattern.or q₁ q₂         => HashSet.union (headConstructors q₁) (headConstructors q₂)
-
----
-
-def nil := Pattern.constructor "nil" []
-def cons p₁ p₂ := Pattern.constructor "cons" [p₁, p₂]
-def __ := Pattern.wildcard
-
-#eval specialize "cons" 2
-  [
-    ([nil,        __        ], 1),
-    ([__,         nil       ], 2),
-    ([cons __ __, cons __ __], 3)
-  ]
-
-#eval specialize "nil" 0
-  [
-    ([nil,        __        ], 1),
-    ([__,         nil       ], 2),
-    ([cons __ __, cons __ __], 3)
-  ]
-
-#eval default
-  [
-    ([nil, __ ], 1),
-    ([__,  nil], 2),
-    ([__,  __ ], 3)
-  ]
-
-#eval compile [2, 2] [[0], [1]]
-  [
-    ([nil,        __        ], 1),
-    ([__,         nil       ], 2),
-    ([cons __ __, cons __ __], 3)
-  ]
-
-#eval compile [2, 2] [[1], [0]]
-  [
-    ([__,         nil       ], 1),
-    ([nil,        __        ], 2),
-    ([cons __ __, cons __ __], 3)
-  ]
-
-#eval compile [2, 2] [[0], [1]]
-  [
-    ([cons __ __, __        ], 1),
-    ([__,         cons __ __], 2),
-    ([nil,        nil       ], 3)
-  ]
-
-#eval compile [2, 2] [[0], [1]]
-  [
-    ([cons __ (cons __ (cons __ __)), __ ], 1),
-    ([__,                             nil], 2),
-    ([__,                             __ ], 3)
-  ]
-
-#eval compile [2] [[0]]
-  [
-    ([nil], 1)
-  ]
