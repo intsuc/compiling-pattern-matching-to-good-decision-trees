@@ -45,20 +45,20 @@ partial def default [Inhabited α] : ClauseMatrix α → ClauseMatrix α :=
                                              default [(q₂ :: ps, a)]
     | ([],                             a) => [([], a)]
 
-partial def compile [Inhabited α] (signatures : List Nat) : List Occurrence → ClauseMatrix α → Except String (DecisionTree α)
+partial def compile [Inhabited α] (signatures : List (String × Nat)) : List Occurrence → ClauseMatrix α → Except String (DecisionTree α)
   | _,           []                    => throw "fail"
   | occurrences, matrix@((ps, a) :: _) =>
     if ps.all wildcard then
       DecisionTree.leaf a
     else
       let (o, os) := (occurrences.head!, occurrences.tail!)
-      let index := (List.range ps.length) |>.find? (fun n => matrix.any fun (ps, _) => !wildcard (ps.get! n)) |>.get!
+      let index := (List.range ps.length) |>.find? (fun n => matrix.any fun (ps, _) => !(wildcard (ps.get! n))) |>.get!
       if index == 0 then do
         let column := matrix.map (·.fst.get! index)
         let headConstructors := column |>.map headConstructors |>.foldl HashSet.union HashSet.empty |>.toList
         let caseList := ← headConstructors.mapM fun
           (c, a) => do (c, ← compile signatures ((List.range a).map (o ++ [·]) ++ os) (specialize c a matrix))
-        if headConstructors.length == signatures.head! then
+        if headConstructors.length == (signatures |>.find? (·.fst == headConstructors.head!.fst) |>.get! |>.snd) then
           DecisionTree.switch o (CaseList.mk caseList)
         else
           DecisionTree.switch o (CaseList.mk (("_", ← compile signatures os (default matrix)) :: caseList))
